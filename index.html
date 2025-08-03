@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>скачивание иконок ролей discord</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to bottom, #1e2124, #2c2f33);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #7289da;
+      text-transform: lowercase;
+      margin-bottom: 1rem;
+    }
+    input, select, button {
+      width: 100%;
+      max-width: 400px;
+      margin: 0.5rem 0;
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+    }
+    input, select {
+      background-color: #2c2f33;
+      color: #ffffff;
+    }
+    button {
+      background-color: #7289da;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #5b6eae;
+      transform: scale(1.02);
+    }
+    #icons-preview {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 2rem;
+      gap: 1rem;
+    }
+    .icon-item {
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .icon-item img {
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 2px solid #7289da;
+      background: #1e2124;
+      margin-bottom: 0.4rem;
+    }
+    #log {
+      max-width: 600px;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      text-align: center;
+      color: #aaaaaa;
+    }
+  </style>
+</head>
+<body>
+  <h1>скачивание иконок ролей discord</h1>
+  <input type="text" id="token" placeholder="введите токен бота (начинается с Bot ...)" />
+  <button onclick="loadGuilds()">загрузить серверы</button>
+  <select id="guildSelect"></select>
+  <button onclick="fetchRoles()">скачать иконки ролей</button>
+  <div id="icons-preview"></div>
+  <div id="log">—</div>
+
+  <script>
+    async function loadGuilds() {
+      const token = document.getElementById("token").value.trim();
+      const log = document.getElementById("log");
+      log.textContent = "загрузка серверов...";
+      try {
+        const res = await fetch("https://discord.com/api/v10/users/@me/guilds", {
+          headers: { Authorization: token }
+        });
+        if (!res.ok) {
+          log.textContent = `ошибка при получении серверов: ${res.status}`;
+          return;
+        }
+        const guilds = await res.json();
+        const select = document.getElementById("guildSelect");
+        select.innerHTML = "";
+        guilds.forEach(g => {
+          const opt = document.createElement("option");
+          opt.value = g.id;
+          opt.textContent = g.name;
+          select.appendChild(opt);
+        });
+        log.textContent = "серверы загружены.";
+      } catch (e) {
+        log.textContent = `ошибка: ${e.message}`;
+      }
+    }
+
+    async function fetchRoles() {
+      const token = document.getElementById("token").value.trim();
+      const guildId = document.getElementById("guildSelect").value;
+      const log = document.getElementById("log");
+      const preview = document.getElementById("icons-preview");
+      preview.innerHTML = "";
+      log.textContent = "загрузка ролей...";
+
+      try {
+        const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
+          headers: { Authorization: token }
+        });
+        if (!res.ok) {
+          log.textContent = `ошибка при получении ролей: ${res.status}`;
+          return;
+        }
+        const roles = await res.json();
+        const zip = new JSZip();
+        let count = 0;
+        for (const role of roles) {
+          if (role.icon) {
+            const url = `https://cdn.discordapp.com/role-icons/${role.id}/${role.icon}.png?size=64`;
+            const imgRes = await fetch(url);
+            if (!imgRes.ok) continue;
+            const blob = await imgRes.blob();
+            const cleanName = role.name.replace(/[^a-z0-9а-яё]/gi, '_').substring(0, 32);
+            zip.file(`${cleanName}_${role.id}.png`, blob);
+            const imgURL = URL.createObjectURL(blob);
+            preview.innerHTML += `<div class=\"icon-item\"><img src=\"${imgURL}\" /><div>${cleanName}</div></div>`;
+            count++;
+          }
+        }
+        if (!count) {
+          log.textContent = "иконки не найдены.";
+          return;
+        }
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        saveAs(zipBlob, `иконки_ролей_${guildId}.zip`);
+        log.textContent = `скачано ${count} иконок.`;
+      } catch (e) {
+        log.textContent = `ошибка: ${e.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
